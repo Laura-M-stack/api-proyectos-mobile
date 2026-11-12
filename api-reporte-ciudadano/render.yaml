@@ -5,6 +5,8 @@ services:
     name: api-reporte-ciudadano
     runtime: docker
     plan: free
+    # El repo tiene varias APIs (una por carpeta): esta vive en api-reporte-ciudadano/.
+    rootDir: api-reporte-ciudadano
     healthCheckPath: /salud
     envVars:
       - key: ENTORNO
