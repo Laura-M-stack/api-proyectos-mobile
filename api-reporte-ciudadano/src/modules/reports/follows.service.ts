@@ -1,10 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, type Repository } from 'typeorm';
+import { DataSource, In, type Repository } from 'typeorm';
 import { esViolacionDeUnicidad } from '../../common/db/uniqueness.js';
 import { ErrorApi } from '../../common/errors/catalog.js';
 import { nuevoId } from '../../common/ids/ids.js';
 import { Reloj } from '../../common/clock/clock.js';
+import { saltoYTamano, type Pagina } from '../../common/response/response.js';
 import type { Usuario } from '../users/user.entity.js';
 import { AvisosDeReportes } from './report-notices.service.js';
 import { Adhesion } from './follow.entity.js';
@@ -69,6 +70,33 @@ export class ServicioAdhesiones {
     const respuesta = await this.respuesta(reporteId, true);
     await this.avisos.adhesion(reporte, respuesta.reporte.adhesiones);
     return respuesta;
+  }
+
+  /**
+   * Los reportes a los que el vecino se sumó, del más nuevo al más viejo (por la fecha en que
+   * se sumó). Incluye los cerrados: el vecino quiere ver en qué terminó lo que apoyó. Un
+   * reporte que se marcó como duplicado deja al autor sumado al original, así que también
+   * aparece acá.
+   */
+  async listarDe(
+    usuarioId: string,
+    pagina: Pagina,
+  ): Promise<[ReporteCompleto[], number]> {
+    const [adhesiones, total] = await this.adhesiones.findAndCount({
+      where: { usuarioId },
+      order: { creadoEn: 'DESC', id: 'DESC' },
+      ...saltoYTamano(pagina),
+    });
+    if (adhesiones.length === 0) return [[], total];
+    const reportes = await this.reportes.findBy({
+      id: In(adhesiones.map((a) => a.reporteId)),
+    });
+    const porId = new Map(reportes.map((r) => [r.id, r]));
+    // Mismo orden que las adhesiones; un reporte borrado de la base no rompe la lista.
+    const ordenados = adhesiones
+      .map((a) => porId.get(a.reporteId))
+      .filter((r): r is Reporte => r !== undefined);
+    return [await this.servicioReportes.conFotos(ordenados), total];
   }
 
   private async respuesta(reporteId: string, creada: boolean) {

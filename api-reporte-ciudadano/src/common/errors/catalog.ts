@@ -101,6 +101,10 @@ export const CATALOGO = {
     estado: 422,
     mensaje: 'Esa cuadrilla trabaja en otra zona.',
   },
+  ZONA_NO_ENCONTRADA: {
+    estado: 422,
+    mensaje: 'No existe esa zona.',
+  },
   DUPLICADO_INVALIDO: {
     estado: 422,
     mensaje: 'No se puede marcar como duplicado de ese reporte.',

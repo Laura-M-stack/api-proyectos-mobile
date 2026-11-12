@@ -9,6 +9,7 @@ import { CambioDeEstado } from './status-change.entity.js';
 import { FotoDeReporte } from './photo.entity.js';
 import {
   ControladorBandeja,
+  ControladorMisAdhesiones,
   ControladorMisReportes,
   ControladorReportes,
 } from './reports.controller.js';
@@ -28,6 +29,7 @@ import { Reporte } from './report.entity.js';
   controllers: [
     ControladorReportes,
     ControladorMisReportes,
+    ControladorMisAdhesiones,
     ControladorBandeja,
   ],
   providers: [

@@ -15,6 +15,7 @@ import { nuevoId } from '../../common/ids/ids.js';
 import { Reloj } from '../../common/clock/clock.js';
 import { saltoYTamano } from '../../common/response/response.js';
 import { Cuadrilla } from '../catalogs/crew.entity.js';
+import { Zona } from '../catalogs/zone.entity.js';
 import type { Usuario } from '../users/user.entity.js';
 import { Adhesion } from './follow.entity.js';
 import { recalcularAdhesiones } from './follows.service.js';
@@ -24,6 +25,7 @@ import {
   ZONA_TODAS,
   type AsignarCuadrillaDto,
   type CambiarEstadoDto,
+  type CambiarZonaDto,
   type FiltroBandejaDto,
   type FotoDelArregloDto,
   type MarcarDuplicadoDto,
@@ -236,6 +238,59 @@ export class ServicioBandeja {
     return this.servicioReportes.obtener(id);
   }
 
+  /**
+   * Corrige la zona de un reporte (operador). La zona se calcula sola al crear el reporte, pero
+   * un punto cerca del borde puede caer en la que no corresponde.
+   *
+   * Si el reporte tenía una cuadrilla de OTRA zona, la cuadrilla se suelta (no puede trabajar
+   * fuera de su zona, la misma regla que CUADRILLA_DE_OTRA_ZONA) y queda un cambio de estado
+   * que lo explica: un `asignado` vuelve a `en_revision`, porque `asignado` sin cuadrilla no
+   * existe. Si la cuadrilla es de la zona nueva, o no había cuadrilla, sólo cambia la zona.
+   * Repetir el pedido con la misma zona no cambia nada.
+   */
+  async cambiarZona(
+    operador: Usuario,
+    id: string,
+    dto: CambiarZonaDto,
+  ): Promise<ReporteCompleto> {
+    const efectos = await this.transaccion(async (manager) => {
+      const reporte = await reporteBloqueado(manager, id);
+      const zona = await manager.findOneBy(Zona, { id: dto.zonaId });
+      if (!zona) throw new ErrorApi('ZONA_NO_ENCONTRADA');
+      if (reporte.zonaId === zona.id) return null;
+      if (!esEstadoAbierto(reporte.estado))
+        throw new ErrorApi('REPORTE_CERRADO');
+
+      const anterior = await manager.findOneBy(Zona, { id: reporte.zonaId });
+      await manager.update(Reporte, { id }, { zonaId: zona.id });
+
+      if (!reporte.cuadrillaId) return null;
+      const cuadrilla = await manager.findOneBy(Cuadrilla, {
+        id: reporte.cuadrillaId,
+      });
+      if (cuadrilla && cuadrilla.zonaId === zona.id) return null;
+
+      const estado: EstadoReporte =
+        reporte.estado === 'asignado' ? 'en_revision' : reporte.estado;
+      const motivo =
+        `Se corrigió la zona${anterior ? ` (${anterior.nombre} → ${zona.nombre})` : ` (→ ${zona.nombre})`}` +
+        ` y se soltó la ${cuadrilla?.nombre ?? 'cuadrilla asignada'}, que trabaja en otra zona.`;
+      await this.registrarCambio(
+        manager,
+        reporte,
+        estado,
+        dto.comentario ? `${motivo} ${dto.comentario}` : motivo,
+        operador,
+        null,
+      );
+      return { reporte, estado, cambio: estado !== reporte.estado };
+    });
+    if (efectos?.cambio) {
+      await this.avisos.cambioDeEstado(efectos.reporte, efectos.estado);
+    }
+    return this.servicioReportes.obtener(id);
+  }
+
   /** R15: foto del arreglo. `creada` es false si el `id` del teléfono ya estaba en este reporte. */
   async agregarFotoDelArreglo(
     id: string,
@@ -305,7 +360,8 @@ export class ServicioBandeja {
     estado: EstadoReporte,
     comentario: string | null,
     operador: Usuario,
-    cuadrillaId?: string,
+    /** undefined: no se toca; null: se suelta la cuadrilla. */
+    cuadrillaId?: string | null,
   ): Promise<void> {
     const ultimo = await manager.findOne(CambioDeEstado, {
       where: { reporteId: reporte.id },

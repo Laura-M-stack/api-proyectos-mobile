@@ -136,3 +136,23 @@ export class FotoDelArregloDto {
   @MaxLength(500, conMensaje('La dirección de la foto es demasiado larga.'))
   url: string;
 }
+
+export class CambiarZonaDto {
+  @ApiProperty({ example: 'zon-sur' })
+  @IsString(conMensaje('Falta la zona.'))
+  @Matches(patronId('zon'), conMensaje('La zona no es válida.'))
+  zonaId: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    maxLength: MAX_COMENTARIO,
+    description:
+      'Por qué se corrige la zona. Lo ve el vecino si se suelta la cuadrilla.',
+  })
+  @VacioANulo()
+  @NoNulo()
+  @IsString()
+  @MaxLength(MAX_COMENTARIO, conMensaje('El comentario es demasiado largo.'))
+  comentario?: string | null;
+}

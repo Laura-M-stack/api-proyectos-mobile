@@ -12,13 +12,12 @@ Las respuestas tienen **exactamente** la forma de los tipos del PRD que ya tiene
 > reportes, mapa, bandeja del operador, avisos push, publicación en la nube y datos de demo.
 > Lo que cambia queda en `CHANGELOG.md`.
 
-**Avisos push — la parte que programan ustedes:** guardar los tokens de Expo y mandar las push
-la completan los alumnos (`POST /dispositivos`, `DELETE /dispositivos/:tokenExpo` y
-`POST /dispositivos/prueba` responden `501 NO_IMPLEMENTADO` hasta entonces). Empezá por
-`docs/NOTIFICATIONS.md`. Lo demás de la API ya decide cuándo y a quién avisar: registrá el
-teléfono con `POST /dispositivos` (cuando lo programen) y la API le avisa al autor de un
-reporte cuando cambia su estado y cuando alguien se suma (si `avisosActivos` es `true`; se
-cambia con `PATCH /yo`). Para probar sin esperar a un operador: `POST /dispositivos/prueba`.
+**Avisos push:** implementados por el grupo (`src/student-notifications/`: tabla `dispositivos`
+para los tokens de Expo y envío a Expo en tandas de 100, descartando los `DeviceNotRegistered`).
+La app registra el teléfono con `POST /dispositivos` y la API le avisa al autor de un reporte
+cuando cambia su estado y cuando alguien se suma (si `avisosActivos` es `true`; se cambia con
+`PATCH /yo`). Para probar sin esperar a un operador: `POST /dispositivos/prueba`. La consigna se
+verifica con `pnpm test:notificaciones`.
 
 ---
 
@@ -160,14 +159,15 @@ operadores no se crean desde la app.
 | `PATCH` | `/yo` | con sesión | `{ nombre?, telefono?, avisosActivos? }` |
 | `POST` | `/archivos` | con sesión | Sube una foto (jpeg/png/webp, 5 MB), un audio (m4a/aac/mp3, 10 MB) o un video (mp4, 30 MB). |
 | `GET` | `/archivos/<clave>` | público | Baja un archivo; acepta `Range` para adelantar audio y video. |
-| `POST` | `/dispositivos` | con sesión | **Lo completan ustedes (501).** `{ tokenExpo, plataforma }`: registra el teléfono para recibir push. |
-| `DELETE` | `/dispositivos/:tokenExpo` | con sesión | **Lo completan ustedes (501).** Lo da de baja. |
-| `POST` | `/dispositivos/prueba` | con sesión | **Lo completan ustedes (501).** Manda una push de prueba a tus teléfonos. |
+| `POST` | `/dispositivos` | con sesión | `{ tokenExpo, plataforma }`: registra el teléfono para recibir push. |
+| `DELETE` | `/dispositivos/:tokenExpo` | con sesión | Lo da de baja. |
+| `POST` | `/dispositivos/prueba` | con sesión | Manda una push de prueba a tus teléfonos. |
 | `GET` | `/tipos-de-reporte` | público | Los ocho tipos de problema, con ícono y color. |
 | `GET` | `/zonas` | público | Las cuatro zonas de la ciudad, con su `limite` (polígono). |
 | `GET` | `/cuadrillas` | operador | Cuadrillas municipales. Filtros `zonaId` y `activa`. |
 | `POST` | `/reportes` | con sesión | Crea un reporte (con foto obligatoria). Se puede repetir con el mismo `id`: no duplica. |
 | `GET` | `/yo/reportes` | con sesión | Tus reportes, del más nuevo al más viejo. |
+| `GET` | `/yo/adhesiones` | con sesión | Los reportes a los que te sumaste, del más nuevo al más viejo. |
 | `GET` | `/reportes` | público | El mapa de la ciudad. Filtros `tipoId`, `zonaId`, `estado` (uno o varios separados por coma), `latitud`+`longitud`+`radioMetros` o `norte`+`sur`+`este`+`oeste`. Sin `estado` no trae los rechazados. `porPagina` hasta 500. |
 | `GET` | `/reportes/cercanos` | público | Reportes abiertos a 50 m o menos de `latitud`/`longitud` (hasta 200 con `radioMetros`), del más cercano al más lejano. Filtro `tipoId`. |
 | `POST` | `/reportes/:id/adhesiones` | con sesión | Sumarte a un reporte que no es tuyo. 201 la primera vez, 200 si ya estabas. |
@@ -177,6 +177,7 @@ operadores no se crean desde la app.
 | `GET` | `/bandeja` | operador | Reportes abiertos, los más apoyados primero (`adhesiones` descendente y, a igualdad, el más viejo). Filtros `estado` (sólo abiertos), `tipoId`, `zonaId` (por defecto la zona del operador; `todas` para ver todo). |
 | `PATCH` | `/reportes/:id/estado` | operador | `{ estado, comentario? }`. Crea un cambio de estado. Rechazar exige `comentario`; `asignado` va por `/cuadrilla`. |
 | `PATCH` | `/reportes/:id/cuadrilla` | operador | `{ cuadrillaId, comentario? }`. Asigna o reasigna (activa y de la zona del reporte) y pasa a `asignado`. |
+| `PATCH` | `/reportes/:id/zona` | operador | `{ zonaId, comentario? }`. Corrige la zona; si la cuadrilla es de otra zona, se suelta y queda un cambio de estado. |
 | `POST` | `/reportes/:id/duplicado` | operador | `{ originalId }`. Queda `rechazado` como duplicado y su autor se suma al original. |
 | `POST` | `/reportes/:id/fotos` | operador | `{ id?, url }`. Foto del arreglo (`momento: "arreglo"`), hasta tres, con el reporte `asignado` o `resuelto`. |
 <!-- endpoints:fin -->
@@ -211,6 +212,7 @@ operadores no se crean desde la app.
 | `CUADRILLA_NO_ENCONTRADA` | 422 | No existe esa cuadrilla. |
 | `CUADRILLA_INACTIVA` | 422 | Esa cuadrilla no está activa. |
 | `CUADRILLA_DE_OTRA_ZONA` | 422 | Esa cuadrilla trabaja en otra zona. |
+| `ZONA_NO_ENCONTRADA` | 422 | No existe esa zona. |
 | `DUPLICADO_INVALIDO` | 422 | No se puede marcar como duplicado de ese reporte. |
 | `ESTADO_NO_ADMITE_FOTO` | 422 | La foto del arreglo se sube cuando el reporte está asignado o resuelto. |
 | `NO_IMPLEMENTADO` | 501 | Esta parte la programan ustedes. Mirá docs/NOTIFICATIONS.md. |

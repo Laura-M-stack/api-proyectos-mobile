@@ -1,5 +1,7 @@
-// Verificación independiente de M8 — Notificaciones para completar (AGENTS §19.3). Caja negra.
-// Corre con los puertos reales (los vacíos de main).
+// Verificación independiente de M8 — Notificaciones (AGENTS §19.3). Caja negra.
+// Corre con los puertos reales. El grupo completó la consigna (src/student-notifications/):
+// se sacaron los casos que verificaban el 501 de los puertos vacíos; la consigna en sí se
+// verifica con `pnpm test:notificaciones`.
 import { crearApp, type AppDePrueba } from '../utilities/create-app.js';
 import { esperarContrato, esperarError } from '../utilities/contract.js';
 import {
@@ -15,7 +17,6 @@ import {
 } from '../utilities/users.js';
 import { crearCambio, crearReporte, ROCAMORA } from '../utilities/reports.js';
 
-const MENSAJE = 'Esta parte la programan ustedes. Mirá docs/NOTIFICATIONS.md.';
 const TOKEN = 'ExponentPushToken[ver8-abc123]';
 
 let ctx: AppDePrueba;
@@ -60,51 +61,7 @@ const post = (u: UsuarioDePrueba | null, ruta: string, cuerpo?: object) => {
   return cuerpo ? r.send(cuerpo) : r;
 };
 
-describe('AGENTS §19.3 — los tres endpoints responden 501 con el sobre exacto', () => {
-  it.each([
-    ['POST /dispositivos', 'post', '/dispositivos'],
-    [
-      'DELETE /dispositivos/:t',
-      'delete',
-      `/dispositivos/${encodeURIComponent(TOKEN)}`,
-    ],
-    ['POST /dispositivos/prueba', 'post', '/dispositivos/prueba'],
-  ] as const)('%s', async (_n, metodo, ruta) => {
-    const u = await crearVecino(ctx);
-    const base = ctx
-      .http()
-      [metodo](ruta)
-      .set(...u.auth);
-    const res =
-      metodo === 'post' && ruta === '/dispositivos'
-        ? await base.send({ tokenExpo: TOKEN, plataforma: 'android' })
-        : await base;
-    esperarError(res, 501, 'NO_IMPLEMENTADO');
-    expect(Object.keys(res.body)).toEqual(['error']);
-    expect(Object.keys(res.body.error).sort()).toEqual(['codigo', 'mensaje']);
-    expect(res.body.error.mensaje).toBe(MENSAJE);
-  });
-
-  it('también para un operador', async () => {
-    esperarError(
-      await post(op, '/dispositivos/prueba'),
-      501,
-      'NO_IMPLEMENTADO',
-    );
-  });
-
-  it('el 501 se repite (no queda nada a medias)', async () => {
-    const u = await crearVecino(ctx);
-    for (let i = 0; i < 2; i++)
-      esperarError(
-        await post(u, '/dispositivos', { tokenExpo: TOKEN, plataforma: 'ios' }),
-        501,
-        'NO_IMPLEMENTADO',
-      );
-  });
-});
-
-describe('AGENTS §19.3 / §7.3 — 401 y 400 van antes del 501', () => {
+describe('AGENTS §19.3 / §7.3 — 401 y 400 en /dispositivos', () => {
   it.each([
     ['post', '/dispositivos'],
     ['post', '/dispositivos/prueba'],
@@ -141,9 +98,9 @@ describe('AGENTS §19.3 / §7.3 — 401 y 400 van antes del 501', () => {
     );
   });
 
-  it('POST /dispositivos/prueba con campos de más → 400 (o 501), nunca 500', async () => {
+  it('POST /dispositivos/prueba con campos de más → nunca 500', async () => {
     const res = await post(ana, '/dispositivos/prueba', { x: 1 });
-    expect([400, 501]).toContain(res.status);
+    expect([200, 400]).toContain(res.status);
   });
 });
 
@@ -250,7 +207,7 @@ describe('AGENTS §19.3 — los flujos que avisan siguen respondiendo bien', () 
     expect(res.status).toBe(200);
   });
 
-  it('la push no sale hacia Expo mientras el enviador está vacío', async () => {
+  it('sin dispositivos registrados no sale ninguna push hacia Expo', async () => {
     await ctx.esperarAvisos();
     expect(ctx.notificador.enviadas).toHaveLength(0);
   });
@@ -327,27 +284,10 @@ describe('AGENTS §19.3 — el resto de la API no cambió', () => {
   });
 });
 
-describe('AGENTS §11.5 / §19.3 — Swagger marca los tres endpoints', () => {
-  it.each([
-    ['/dispositivos', 'post'],
-    ['/dispositivos/{tokenExpo}', 'delete'],
-    ['/dispositivos/prueba', 'post'],
-  ])(
-    '%s %s menciona que lo completan los alumnos y el 501',
-    async (ruta, m) => {
-      const res = await ctx.http().get('/docs-json');
-      const op_ = res.body.paths[ruta]?.[m];
-      expect(op_, `${m} ${ruta}`).toBeDefined();
-      const texto = JSON.stringify(op_);
-      expect(texto).toMatch(/ustedes|alumnos/i);
-      expect(Object.keys(op_.responses)).toContain('501');
-    },
-  );
-
+describe('AGENTS §11.5 / §19.3 — Swagger ya no marca nada como pendiente', () => {
   it('los demás endpoints no dicen que estén pendientes', async () => {
     const res = await ctx.http().get('/docs-json');
     const otros = Object.entries(res.body.paths as Record<string, object>)
-      .filter(([p]) => !p.startsWith('/dispositivos'))
       .map(([, v]) => JSON.stringify(v))
       .join('');
     expect(otros).not.toMatch(/completan ustedes|501/i);

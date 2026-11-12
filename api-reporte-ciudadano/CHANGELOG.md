@@ -5,6 +5,18 @@ forma de las respuestas no cambia: sólo se agregan endpoints y códigos de erro
 
 ## Sin publicar
 
+### Grupo — Notificaciones completas y dos endpoints nuevos
+
+- `POST /dispositivos`, `DELETE /dispositivos/:tokenExpo` y `POST /dispositivos/prueba` ya
+  funcionan: los tokens se guardan en la tabla `dispositivos` y las push salen a Expo en tandas
+  de 100 (`src/student-notifications/`). Los tokens que Expo da de baja se descartan solos.
+- **Endpoint nuevo:** `GET /yo/adhesiones` — los reportes a los que el vecino se sumó, del más
+  nuevo al más viejo, con el mismo sobre que `GET /yo/reportes`.
+- **Endpoint nuevo:** `PATCH /reportes/:id/zona` (operador) — `{ zonaId, comentario? }`.
+  Corrige la zona; si la cuadrilla asignada es de otra zona se suelta y queda un cambio de
+  estado (`asignado` vuelve a `en_revision`).
+- **Código de error nuevo:** `ZONA_NO_ENCONTRADA` (422).
+
 ### M8 — Notificaciones para completar
 
 - **Código de error nuevo:** `NO_IMPLEMENTADO` (501).

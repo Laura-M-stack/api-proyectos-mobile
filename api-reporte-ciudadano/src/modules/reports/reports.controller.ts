@@ -35,6 +35,7 @@ import { ServicioBandeja } from './inbox.service.js';
 import {
   AsignarCuadrillaDto,
   CambiarEstadoDto,
+  CambiarZonaDto,
   FiltroBandejaDto,
   FotoDelArregloDto,
   MarcarDuplicadoDto,
@@ -258,6 +259,37 @@ export class ControladorReportes {
     return respuestaUno(aReporte(reporte, fotos));
   }
 
+  @Patch(':id/zona')
+  @Roles('operador')
+  @DocConSesion()
+  @ApiOperation({
+    summary: 'Corregir la zona de un reporte (operador)',
+    description:
+      '`{ zonaId, comentario? }` con una de las cuatro zonas. La zona se calcula al crear el reporte; esto la corrige. ' +
+      'Si la cuadrilla asignada es de otra zona, se suelta y queda un cambio de estado que lo explica (`asignado` vuelve a `en_revision`). ' +
+      'Sólo con el reporte abierto. Repetir el pedido con la misma zona no cambia nada.',
+  })
+  @DocRespuestaUno(200, ReporteDoc, 'El reporte con la zona corregida.')
+  @DocErrores(
+    'VALIDACION_FALLIDA',
+    'SIN_PERMISO',
+    'REPORTE_NO_ENCONTRADO',
+    'ZONA_NO_ENCONTRADA',
+    'REPORTE_CERRADO',
+  )
+  async cambiarZona(
+    @UsuarioActual() operador: Usuario,
+    @Param() { id }: ParametroIdReporteDto,
+    @Body() dto: CambiarZonaDto,
+  ): Promise<RespuestaUno<ReporteContrato>> {
+    const { reporte, fotos } = await this.bandeja.cambiarZona(
+      operador,
+      id,
+      dto,
+    );
+    return respuestaUno(aReporte(reporte, fotos));
+  }
+
   @Post(':id/duplicado')
   @Roles('operador')
   @HttpCode(200)
@@ -362,6 +394,32 @@ export class ControladorMisReportes {
     @Query() q: PaginacionDto,
   ): Promise<RespuestaLista<ReporteContrato>> {
     const [filas, total] = await this.reportes.listarPropios(usuario.id, q);
+    return respuestaLista(
+      filas.map(({ reporte, fotos }) => aReporte(reporte, fotos)),
+      { total, pagina: q.pagina, porPagina: q.porPagina },
+    );
+  }
+}
+
+@ApiTags('Reportes')
+@Controller('yo/adhesiones')
+@DocConSesion()
+export class ControladorMisAdhesiones {
+  constructor(private readonly adhesiones: ServicioAdhesiones) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'Los reportes a los que me sumé',
+    description:
+      'Del más nuevo al más viejo (por cuándo te sumaste), en cualquier estado. Mismo sobre que `GET /yo/reportes`.',
+  })
+  @DocRespuestaLista(ReporteDoc, 'Los reportes a los que me sumé.')
+  @DocErrores('VALIDACION_FALLIDA')
+  async mias(
+    @UsuarioActual() usuario: Usuario,
+    @Query() q: PaginacionDto,
+  ): Promise<RespuestaLista<ReporteContrato>> {
+    const [filas, total] = await this.adhesiones.listarDe(usuario.id, q);
     return respuestaLista(
       filas.map(({ reporte, fotos }) => aReporte(reporte, fotos)),
       { total, pagina: q.pagina, porPagina: q.porPagina },
